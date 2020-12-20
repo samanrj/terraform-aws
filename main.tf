@@ -36,7 +36,7 @@ resource "aws_internet_gateway" "vpc_igw" {
 ## Public to bind the ALB to and Private for backend webservers (both for higher availability reasons)
 resource "aws_subnet" "public_eu_west_2a" {
   vpc_id                  = aws_vpc.default.id
-  cidr_block              = "10.0.0.0/24"
+  cidr_block              = var.public_eu_west_2a_cidr
   map_public_ip_on_launch = true
   availability_zone       = "eu-west-2a"
 
@@ -47,7 +47,7 @@ resource "aws_subnet" "public_eu_west_2a" {
 
 resource "aws_subnet" "public_eu_west_2b" {
   vpc_id                  = aws_vpc.default.id
-  cidr_block              = "10.0.1.0/24"
+  cidr_block              = var.public_eu_west_2b_cidr
   map_public_ip_on_launch = true
   availability_zone       = "eu-west-2b"
 
@@ -58,7 +58,7 @@ resource "aws_subnet" "public_eu_west_2b" {
 
 resource "aws_subnet" "private_eu_west_2a" {
   vpc_id                  = aws_vpc.default.id
-  cidr_block              = "10.0.8.0/24"
+  cidr_block              = var.private_eu_west_2a_cidr
   map_public_ip_on_launch = true
   availability_zone       = "eu-west-2a"
 
@@ -69,7 +69,7 @@ resource "aws_subnet" "private_eu_west_2a" {
 
 resource "aws_subnet" "private_eu_west_2b" {
   vpc_id                  = aws_vpc.default.id
-  cidr_block              = "10.0.16.0/24"
+  cidr_block              = var.private_eu_west_2b_cidr
   map_public_ip_on_launch = true
   availability_zone       = "eu-west-2b"
 

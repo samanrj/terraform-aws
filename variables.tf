@@ -17,6 +17,22 @@ variable "vpc_name" {
   default = "senseon_vpc"
 }
 
+variable "public_eu_west_2a_cidr" {
+  default = "10.0.0.0/24"
+}
+
+variable "public_eu_west_2b_cidr" {
+  default = "10.0.1.0/24"
+}
+
+variable "private_eu_west_2a_cidr" {
+  default = "10.0.8.0/24"
+}
+
+variable "private_eu_west_2b_cidr" {
+  default = "10.0.16.0/24"
+}
+
 variable "vpc_igw_name" {
   default = "VPC Internet Gateway"
 }
