@@ -168,18 +168,7 @@ resource "aws_launch_template" "web-lc" {
 
   # Security group
   security_groups = [aws_security_group.default.id]
-  # user_data       = file("userdata.sh")
-  # user_data = <<-EOF
-  #             #!/bin/bash
-  #             echo "Hello, World" > index.html
-  #             nohup busybox httpd -f -p 8080 &
-  #             EOF
-
-  user_data = <<-EOF
-              #!/bin/bash
-              sudo apt-get -y update
-              apt-get install -y nginx > /tmp/nginx.log
-              EOF
+  user_data       = file("install_apache.sh")
 
   lifecycle {
     create_before_destroy = true
