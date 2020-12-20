@@ -6,19 +6,25 @@ provider "aws" {
   region = var.aws_region
 }
 
+## find availability zones in the region using `aws ec2 describe-availability-zones`
+## stick them in a variable and create a list here to be used within the file
 locals {
   availability_zones = split(",", var.availability_zones)
 }
 
+## create a VPC with the most generic CIDR
 resource "aws_vpc" "default" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
 
   tags = {
-    Name = "tf_test"
+    # Name = "tf_test"
+    Name = "senseon-vpc"
   }
 }
 
+## create an internet gateway for the public subnets to enable
+## communications to/from web
 resource "aws_internet_gateway" "vpc_igw" {
   vpc_id = aws_vpc.default.id
 
@@ -26,6 +32,8 @@ resource "aws_internet_gateway" "vpc_igw" {
     Name = "VPC Internet Gateway"
   }
 }
+
+
 
 resource "aws_subnet" "tf_test_subnet1" {
   vpc_id                  = aws_vpc.default.id
@@ -49,17 +57,24 @@ resource "aws_subnet" "tf_test_subnet2" {
   }
 }
 
-resource "tls_private_key" "example" {
+
+
+## create a private key to be used in the disposable ssl cert we will
+## be creating in the next step
+resource "tls_private_key" "sample-private-key" {
   algorithm   = "ECDSA"
 }
 
-resource "tls_self_signed_cert" "example" {
-  key_algorithm   = tls_private_key.example.algorithm
-  private_key_pem = tls_private_key.example.private_key_pem
+## now create the sel-signed cert
+## in reality and in prod, this won't be needed as most likely we have
+## already uploaded our real existing domain certificates to IAM
+resource "tls_self_signed_cert" "sample-tls-cert" {
+  key_algorithm   = tls_private_key.sample-private-key.algorithm
+  private_key_pem = tls_private_key.sample-private-key.private_key_pem
 
   subject {
-    common_name  = "example.com"
-    organization = "ACME Examples, Inc"
+    common_name  = "senseon.io"
+    organization = "Senseon Tech Ltd."
   }
 
   validity_period_hours = 12
@@ -71,11 +86,14 @@ resource "tls_self_signed_cert" "example" {
   ]
 }
 
-resource "aws_iam_server_certificate" "example" {
-  name             = "example_self_signed_cert"
-  certificate_body = tls_self_signed_cert.example.cert_pem
-  private_key      = tls_private_key.example.private_key_pem
+## add the certificate to IAM so we can refer to this
+## in `certificate_arn` of the load balancer
+resource "aws_iam_server_certificate" "sample-iam-cert" {
+  name             = "senseon_self_signed_cert"
+  certificate_body = tls_self_signed_cert.sample-tls-cert.cert_pem
+  private_key      = tls_private_key.sample-private-key.private_key_pem
 }
+
 
 resource "aws_lb" "front_end" {
   name               = "test-lb-tf"   #var.alb_name
@@ -113,7 +131,7 @@ resource "aws_lb_listener" "front_end" {
   port              = "443"
   protocol          = "HTTPS"
   # ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = "arn:aws:iam::151204058273:server-certificate/example_self_signed_cert"
+  certificate_arn   = "arn:aws:iam::151204058273:server-certificate/senseon_self_signed_cert"
 
   default_action {
     type             = "forward"
