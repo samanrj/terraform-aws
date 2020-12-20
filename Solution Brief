@@ -26,8 +26,6 @@ https://docs.aws.amazon.com/autoscaling/ec2/userguide/attach-load-balancer-asg.h
 https://github.com/hashicorp/terraform-provider-aws/blob/master/examples/elb/main.tf
 https://github.com/hashicorp/terraform-provider-aws/blob/master/examples/asg/main.tf
 
-mention this diagram: file:///C:/Users/saman/Downloads/Terraform-recipe-Managing-Auto-Scaling-Groups-and-Load-Balancers-Target-Infrastructure%20(1).webp
-
 Things I can improve:
 - Found out about this https://github.com/terraform-aws-modules/terraform-aws-alb/tree/v5.10.0/examples/complete-alb a bit too late, otherwise could've just implemented it instead of a load of tinkering I did on my own. That being said, it did look a bit too advanced for my knowledge level and the tinkering was good for learning!
 - Launch Configuration will be deprecated by AWS, I wish I had time to replace it with Launch Templates instead
