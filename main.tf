@@ -12,13 +12,12 @@ locals {
   availability_zones = split(",", var.availability_zones)
 }
 
-## create a VPC with the most generic CIDR
+## create a very generic VPC
 resource "aws_vpc" "default" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
 
   tags = {
-    # Name = "tf_test"
     Name = var.vpc_name
   }
 }
@@ -65,7 +64,7 @@ resource "tls_private_key" "sample-private-key" {
   algorithm   = var.tls_private_key_algorithm
 }
 
-## now create the sel-signed cert
+## now create the self-signed cert itself
 ## in reality and in prod, this won't be needed as most likely we have
 ## already uploaded our real existing domain certificates to IAM
 resource "tls_self_signed_cert" "sample-tls-cert" {
@@ -120,6 +119,9 @@ resource "aws_lb" "web-proxy" {
 #   }
 # }
 
+## let's create a target backend group for the ALB so
+## we can later attach this to an autoscaling group
+## they will be listenning on 80/http
 resource "aws_lb_target_group" "web-proxy" {
   name     = var.target_group_name
   port     = 80
@@ -127,12 +129,14 @@ resource "aws_lb_target_group" "web-proxy" {
   vpc_id   = aws_vpc.default.id
 }
 
+## now let's create the listener and forwarding rules for the lb
+## listening on 443/https and forwarding to the backend TG
 resource "aws_lb_listener" "web-proxy" {
   load_balancer_arn = aws_lb.web-proxy.arn
   port              = "443"
   protocol          = "HTTPS"
   # ssl_policy        = "ELBSecurityPolicy-2016-08"  ?
-  certificate_arn   = "arn:aws:iam::151204058273:server-certificate/senseon_self_signed_cert"  ## this needs to be better
+  certificate_arn   = "arn:aws:iam::151204058273:server-certificate/senseon_self_signed_cert"  ## this needs to be done better
 
   default_action {
     type             = "forward"
@@ -140,10 +144,7 @@ resource "aws_lb_listener" "web-proxy" {
   }
 }
 
-
-
-
-
+## now let's create an ASG
 resource "aws_autoscaling_group" "web-asg" {
   availability_zones        = local.availability_zones
   name                      = var.asg_name
@@ -164,15 +165,17 @@ resource "aws_autoscaling_group" "web-asg" {
   }
 }
 
+## and a launch configuration template for EC2 instances
+## the asg will attempt to bring up / maintain
 resource "aws_launch_configuration" "web-lc" {
-  name          = "terraform-example-lc"
+  name          = var.launch_config_name
   image_id      = var.aws_amis[var.aws_region]
   instance_type = var.instance_type
 
   # Security group
   security_groups = [aws_security_group.default.id]
-  user_data       = file("install_apache.sh")
-
+  user_data       = file("install_apache.sh")   ## to display something when we hit
+                                                ## the dns given to us by the LB
   lifecycle {
     create_before_destroy = true
   }

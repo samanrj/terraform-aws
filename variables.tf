@@ -35,15 +35,16 @@ variable "iam_cert_name" {
 }
 
 variable "load_balancer_name" {
-  # default = "test-lb-tf"
   default = "test-alb"
 }
 
 variable "target_group_name" {
-  # default = "tf-example-lb-tg"
   default = "test-target-group"
 }
 
+variable "launch_config_name" {
+  default = "test-lc"
+}
 
 variable "instance_type" {
   default     = "t2.micro"
@@ -58,7 +59,6 @@ variable "aws_amis" {
 variable "asg_name" {
   default     = "test_asg"
 }
-
 
 variable "asg_min" {
   description = "Min numbers of servers in ASG"
