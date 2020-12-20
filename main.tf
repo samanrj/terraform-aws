@@ -102,23 +102,6 @@ resource "aws_lb" "web-proxy" {
   subnets            = [aws_subnet.tf_test_subnet1.id,aws_subnet.tf_test_subnet2.id]
 }
 
-# ## Security Group for ELB
-# resource "aws_security_group" "elb" {
-#   name = "terraform-example-elb"
-#   egress {
-#     from_port = 0
-#     to_port = 0
-#     protocol = "-1"
-#     cidr_blocks = ["0.0.0.0/0"]
-#   }
-#   ingress {
-#     from_port = 80
-#     to_port = 80
-#     protocol = "tcp"
-#     cidr_blocks = ["0.0.0.0/0"]
-#   }
-# }
-
 ## let's create a target backend group for the ALB so
 ## we can later attach this to an autoscaling group
 ## they will be listenning on 80/http
@@ -144,23 +127,26 @@ resource "aws_lb_listener" "web-proxy" {
   }
 }
 
-## now let's create an ASG
+## now let's create an ASG and
+## pass the target group created above to it
 resource "aws_autoscaling_group" "web-asg" {
   availability_zones        = local.availability_zones
-  name                      = var.asg_name
   max_size                  = var.asg_max
   min_size                  = var.asg_min
   desired_capacity          = var.asg_desired
   force_delete              = true
+  name                      = var.asg_name ## needed a way to reference this in L222
   health_check_grace_period = 300
   launch_configuration      = aws_launch_configuration.web-lc.name
 
   # load_balancers       = [aws_lb.web-proxy.name]
-  target_group_arns         = [aws_lb_target_group.web-proxy.arn]   # ===> https://github.com/terraform-aws-modules/terraform-aws-autoscaling/issues/16
+  target_group_arns         = [aws_lb_target_group.web-proxy.arn]   # ===> https://github.com/terraform-aws-modules/terraform-aws-autoscaling/issues/16#issuecomment-365388692
                                                                     # `load_balancers` only seem to work with ELB
+                                                                    # the other alternative I found was using `aws_autoscaling_attachment` defined here:
+                                                                    # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/autoscaling_attachment
   tag {
     key                 = "Name"
-    value               = "web-asg"
+    value               = var.asg_name
     propagate_at_launch = "true"
   }
 }
@@ -174,8 +160,8 @@ resource "aws_launch_configuration" "web-lc" {
 
   # Security group
   security_groups = [aws_security_group.default.id]
-  user_data       = file("install_apache.sh")   ## to display something when we hit
-                                                ## the dns given to us by the LB
+  user_data       = file("install_apache.sh")   ## to display some welcome message when we hit
+                                                ## the final test dns given to us by the ALB
   lifecycle {
     create_before_destroy = true
   }
@@ -183,25 +169,9 @@ resource "aws_launch_configuration" "web-lc" {
 
 # Our default security group to access
 # the instances over SSH and HTTP
-resource "aws_security_group" "default" {
-  name        = "terraform_example_sg"
-  description = "Used in the terraform"
-
-  # SSH access from anywhere
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # HTTP access from anywhere
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+resource "aws_security_group" "from_web" {
+  name        = var.alb_security_group_name
+  description = "Used for allowing https access to the ALB"
 
   # HTTPS access from anywhere
   ingress {
@@ -220,102 +190,43 @@ resource "aws_security_group" "default" {
   }
 }
 
+# Our default security group to access
+# the instances over SSH and HTTP
+resource "aws_security_group" "default" {
+  name        = var.default_security_group_name
+  description = "only from Load Balancer"
 
-# # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/autoscaling_attachment
-# # Create a new ALB Target Group attachment
-# resource "aws_autoscaling_attachment" "asg_attachment_bar" {
-#   autoscaling_group_name = aws_autoscaling_group.asg.id
-#   alb_target_group_arn   = aws_alb_target_group.test.arn
-# }
+  # SSH access
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.instance_sg_ingress_cidr
+  }
 
+  # HTTP access
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = var.instance_sg_ingress_cidr
+  }
+}
 
+## more advanced usage, let's create a scaling policy
+## based on CPU usage for AWS to dynamically scale the ASG
+## once it detects higher levels of traffic and hence CPU usage higher tha 50%
+## picked that value based on some best practices, but made configurable
+resource "aws_autoscaling_policy" "dynamic_scaling" {
 
+  name                   = var.asg_policy_name
+  autoscaling_group_name = aws_autoscaling_group.web-asg.name
 
-# # target_tracking_configuration - (Optional) A target tracking policy. These have the following structure:
-# resource "aws_autoscaling_policy" "example" {
-#   # ... other configuration ...
-#
-#   target_tracking_configuration {
-#     predefined_metric_specification {
-#       predefined_metric_type = "ASGAverageCPUUtilization"
-#     }
-#
-#     target_value = 40.0
-#   }
-#
-#   target_tracking_configuration {
-#     customized_metric_specification {
-#       metric_dimension {
-#         name  = "fuga"
-#         value = "fuga"
-#       }
-#
-#       metric_name = "hoge"
-#       namespace   = "hoge"
-#       statistic   = "Average"
-#     }
-#
-#     target_value = 40.0
-#   }
-# }
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
 
-
-
-
-# module "alb" {
-#   source  = "terraform-aws-modules/alb/aws"
-#   version = "~> 5.0"
-#
-#   name = "my-alb"
-#
-#   load_balancer_type = "application"
-#
-#   vpc_id             = "vpc-abcde012"
-#   subnets            = ["subnet-abcde012", "subnet-bcde012a"]
-#   security_groups    = ["sg-edcd9784", "sg-edcd9785"]
-#
-#   access_logs = {
-#     bucket = "my-alb-logs"
-#   }
-#
-#   target_groups = [
-#     {
-#       name_prefix      = "pref-"
-#       backend_protocol = "HTTPS"
-#       backend_port     = 443
-#       target_type      = "instance"
-#     }
-#   ]
-#
-#   https_listeners = [
-#     {
-#       port                 = 443
-#       protocol             = "HTTPS"
-#       certificate_arn      = "arn:aws:iam::123456789012:server-certificate/test_cert-123456789012"
-#       action_type          = "authenticate-cognito"
-#       target_group_index   = 0
-#       authenticate_cognito = {
-#         user_pool_arn       = "arn:aws:cognito-idp::123456789012:userpool/test-pool"
-#         user_pool_client_id = "6oRmFiS0JHk="
-#         user_pool_domain    = "test-domain-com"
-#       }
-#     }
-#   ]
-#
-#   http_tcp_listeners = [
-#     {
-#       port        = 80
-#       protocol    = "HTTP"
-#       action_type = "redirect"
-#       redirect = {
-#         port        = "443"
-#         protocol    = "HTTPS"
-#         status_code = "HTTP_301"
-#       }
-#     }
-#   ]
-#
-#   tags = {
-#     Environment = "Test"
-#   }
-# }
+    target_value = var.scaling_policy_cpu_usage_target_value
+  }
+}

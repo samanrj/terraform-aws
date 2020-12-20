@@ -1,3 +1,6 @@
+## names mostly self-explaatory, added
+## descriptions only for those not immediately obvious
+
 variable "aws_region" {
   default = "eu-west-2"
 }
@@ -47,13 +50,28 @@ variable "launch_config_name" {
 }
 
 variable "instance_type" {
-  default     = "t2.micro"
+  default = "t2.micro"
 }
 
 variable "aws_amis" {
   default = {
     "eu-west-2" = "ami-06178cf087598769c"
   }
+}
+
+variable "alb_security_group_name" {
+  default = "example_sg_from_outside"
+}
+
+variable "default_security_group_name" {
+  default = "default_sg"
+}
+
+variable "instance_sg_ingress_cidr" {
+  description = "What CIDR to allow http traffic from"   ## NOTE: I wasn't able to find an elegant way to do it but
+                                                         ## we need to only limit this to the traffic coming from gateway +
+                                                         ## internal corporate subet address for ssh access for instace
+  default     = ["0.0.0.0/0"]
 }
 
 variable "asg_name" {
@@ -73,4 +91,13 @@ variable "asg_max" {
 variable "asg_desired" {
   description = "Desired numbers of servers in ASG"
   default     = "2"
+}
+
+variable "asg_policy_name" {
+  default     = "cpu-usage-trigger"
+}
+
+variable "scaling_policy_cpu_usage_target_value" {
+  description = "target value for cpu usage before AWS scaling policies are alarmed and triggered"
+  default     = 50.0
 }
