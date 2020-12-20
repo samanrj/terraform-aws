@@ -78,7 +78,7 @@ resource "aws_iam_server_certificate" "example" {
 }
 
 resource "aws_lb" "front_end" {
-  name               = "test-lb-tf"
+  name               = "test-lb-tf"   #var.alb_name
   internal           = false
   load_balancer_type = "application"
   subnets            = [aws_subnet.tf_test_subnet1.id,aws_subnet.tf_test_subnet2.id]
@@ -126,17 +126,27 @@ resource "aws_lb_listener" "front_end" {
 
 
 resource "aws_autoscaling_group" "web-asg" {
-  availability_zones   = local.availability_zones
-  name                 = "terraform-example-asg"
-  max_size             = var.asg_max
-  min_size             = var.asg_min
-  desired_capacity     = var.asg_desired
-  force_delete         = true
-  launch_configuration = aws_launch_configuration.web-lc.name
-  target_group_arns    = [aws_lb_target_group.front_end.arn]   # ===> https://github.com/terraform-aws-modules/terraform-aws-autoscaling/issues/16
+  # availability_zones   = local.availability_zones
+  # name                 = "terraform-example-asg"
+  # max_size             = var.asg_max
+  # min_size             = var.asg_min
+  # desired_capacity     = var.asg_desired
+  # force_delete         = true
+  # launch_configuration = aws_launch_configuration.web-lc.name
+  # target_group_arns    = [aws_lb_target_group.front_end.arn]   # ===> https://github.com/terraform-aws-modules/terraform-aws-autoscaling/issues/16
+
+
+  availability_zones        = local.availability_zones
+  name                      = "terraform-example-asg"
+  max_size                  = var.asg_max
+  min_size                  = var.asg_min
+  desired_capacity          = var.asg_desired
+  force_delete              = true
+  health_check_grace_period = 300
+  launch_configuration      = aws_launch_configuration.web-lc.name
 
   # load_balancers       = [aws_lb.front_end.name]
-  #vpc_zone_identifier = ["${split(",", var.availability_zones)}"]
+  target_group_arns         = [aws_lb_target_group.front_end.arn]   # ===> https://github.com/terraform-aws-modules/terraform-aws-autoscaling/issues/16
 
   tag {
     key                 = "Name"
@@ -144,8 +154,14 @@ resource "aws_autoscaling_group" "web-asg" {
     propagate_at_launch = "true"
   }
 }
+# resource "aws_launch_template" "foobar" {
+#   name_prefix   = "foobar"
+#   image_id      = "ami-1a2b3c"
+#   instance_type = "t2.micro"
+# }
 
-resource "aws_launch_configuration" "web-lc" {
+resource "aws_launch_template" "web-lc" {
+# resource "aws_launch_configuration" "web-lc" {
   name          = "terraform-example-lc"
   image_id      = var.aws_amis[var.aws_region]
   instance_type = var.instance_type
@@ -153,7 +169,21 @@ resource "aws_launch_configuration" "web-lc" {
   # Security group
   security_groups = [aws_security_group.default.id]
   # user_data       = file("userdata.sh")
-  # key_name        = var.key_name
+  # user_data = <<-EOF
+  #             #!/bin/bash
+  #             echo "Hello, World" > index.html
+  #             nohup busybox httpd -f -p 8080 &
+  #             EOF
+
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo apt-get -y update
+              apt-get install -y nginx > /tmp/nginx.log
+              EOF
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Our default security group to access
@@ -178,6 +208,14 @@ resource "aws_security_group" "default" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # HTTPS access from anywhere
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   # outbound internet access
   egress {
     from_port   = 0
@@ -186,3 +224,103 @@ resource "aws_security_group" "default" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
+
+
+# # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/autoscaling_attachment
+# # Create a new ALB Target Group attachment
+# resource "aws_autoscaling_attachment" "asg_attachment_bar" {
+#   autoscaling_group_name = aws_autoscaling_group.asg.id
+#   alb_target_group_arn   = aws_alb_target_group.test.arn
+# }
+
+
+
+
+# # target_tracking_configuration - (Optional) A target tracking policy. These have the following structure:
+# resource "aws_autoscaling_policy" "example" {
+#   # ... other configuration ...
+#
+#   target_tracking_configuration {
+#     predefined_metric_specification {
+#       predefined_metric_type = "ASGAverageCPUUtilization"
+#     }
+#
+#     target_value = 40.0
+#   }
+#
+#   target_tracking_configuration {
+#     customized_metric_specification {
+#       metric_dimension {
+#         name  = "fuga"
+#         value = "fuga"
+#       }
+#
+#       metric_name = "hoge"
+#       namespace   = "hoge"
+#       statistic   = "Average"
+#     }
+#
+#     target_value = 40.0
+#   }
+# }
+
+
+
+
+# module "alb" {
+#   source  = "terraform-aws-modules/alb/aws"
+#   version = "~> 5.0"
+#
+#   name = "my-alb"
+#
+#   load_balancer_type = "application"
+#
+#   vpc_id             = "vpc-abcde012"
+#   subnets            = ["subnet-abcde012", "subnet-bcde012a"]
+#   security_groups    = ["sg-edcd9784", "sg-edcd9785"]
+#
+#   access_logs = {
+#     bucket = "my-alb-logs"
+#   }
+#
+#   target_groups = [
+#     {
+#       name_prefix      = "pref-"
+#       backend_protocol = "HTTPS"
+#       backend_port     = 443
+#       target_type      = "instance"
+#     }
+#   ]
+#
+#   https_listeners = [
+#     {
+#       port                 = 443
+#       protocol             = "HTTPS"
+#       certificate_arn      = "arn:aws:iam::123456789012:server-certificate/test_cert-123456789012"
+#       action_type          = "authenticate-cognito"
+#       target_group_index   = 0
+#       authenticate_cognito = {
+#         user_pool_arn       = "arn:aws:cognito-idp::123456789012:userpool/test-pool"
+#         user_pool_client_id = "6oRmFiS0JHk="
+#         user_pool_domain    = "test-domain-com"
+#       }
+#     }
+#   ]
+#
+#   http_tcp_listeners = [
+#     {
+#       port        = 80
+#       protocol    = "HTTP"
+#       action_type = "redirect"
+#       redirect = {
+#         port        = "443"
+#         protocol    = "HTTPS"
+#         status_code = "HTTP_301"
+#       }
+#     }
+#   ]
+#
+#   tags = {
+#     Environment = "Test"
+#   }
+# }
