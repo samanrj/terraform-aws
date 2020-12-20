@@ -6,9 +6,47 @@ variable "availability_zones" {
   default = "eu-west-2a,eu-west-2b,eu-west-2c"
 }
 
+variable "vpc_cidr" {
+  default = "10.0.0.0/16"
+}
+
+variable "vpc_name" {
+  default = "senseon_vpc"
+}
+
+variable "vpc_igw_name" {
+  default = "VPC Internet Gateway"
+}
+
+variable "tls_private_key_algorithm" {
+  default = "ECDSA"
+}
+
+variable "tls_cert_common_name" {
+  default = "senseon.io"
+}
+
+variable "tls_cert_org" {
+  default = "Senseon Tech Ltd."
+}
+
+variable "iam_cert_name" {
+  default = "senseon_self_signed_cert"
+}
+
+variable "load_balancer_name" {
+  # default = "test-lb-tf"
+  default = "test-alb"
+}
+
+variable "target_group_name" {
+  # default = "tf-example-lb-tg"
+  default = "test-target-group"
+}
+
+
 variable "instance_type" {
   default     = "t2.micro"
-  description = "AWS instance type"
 }
 
 variable "aws_amis" {
@@ -16,6 +54,11 @@ variable "aws_amis" {
     "eu-west-2" = "ami-06178cf087598769c"
   }
 }
+
+variable "asg_name" {
+  default     = "test_asg"
+}
+
 
 variable "asg_min" {
   description = "Min numbers of servers in ASG"

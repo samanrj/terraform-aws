@@ -14,12 +14,12 @@ locals {
 
 ## create a VPC with the most generic CIDR
 resource "aws_vpc" "default" {
-  cidr_block           = "10.0.0.0/16"
+  cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
 
   tags = {
     # Name = "tf_test"
-    Name = "senseon-vpc"
+    Name = var.vpc_name
   }
 }
 
@@ -29,7 +29,7 @@ resource "aws_internet_gateway" "vpc_igw" {
   vpc_id = aws_vpc.default.id
 
   tags = {
-    Name = "VPC Internet Gateway"
+    Name = var.vpc_igw_name
   }
 }
 
@@ -62,7 +62,7 @@ resource "aws_subnet" "tf_test_subnet2" {
 ## create a private key to be used in the disposable ssl cert we will
 ## be creating in the next step
 resource "tls_private_key" "sample-private-key" {
-  algorithm   = "ECDSA"
+  algorithm   = var.tls_private_key_algorithm
 }
 
 ## now create the sel-signed cert
@@ -73,8 +73,8 @@ resource "tls_self_signed_cert" "sample-tls-cert" {
   private_key_pem = tls_private_key.sample-private-key.private_key_pem
 
   subject {
-    common_name  = "senseon.io"
-    organization = "Senseon Tech Ltd."
+    common_name  = var.tls_cert_common_name
+    organization = var.tls_cert_org
   }
 
   validity_period_hours = 12
@@ -89,14 +89,15 @@ resource "tls_self_signed_cert" "sample-tls-cert" {
 ## add the certificate to IAM so we can refer to this
 ## in `certificate_arn` of the load balancer
 resource "aws_iam_server_certificate" "sample-iam-cert" {
-  name             = "senseon_self_signed_cert"
+  name             = var.iam_cert_name
   certificate_body = tls_self_signed_cert.sample-tls-cert.cert_pem
   private_key      = tls_private_key.sample-private-key.private_key_pem
 }
 
-
-resource "aws_lb" "front_end" {
-  name               = "test-lb-tf"   #var.alb_name
+## now let's create an Application Load Balancer (ALB) as it's most
+## suitable for use case of https->http application-level forwarding
+resource "aws_lb" "web-proxy" {
+  name               = var.load_balancer_name
   internal           = false
   load_balancer_type = "application"
   subnets            = [aws_subnet.tf_test_subnet1.id,aws_subnet.tf_test_subnet2.id]
@@ -119,23 +120,23 @@ resource "aws_lb" "front_end" {
 #   }
 # }
 
-resource "aws_lb_target_group" "front_end" {
-  name     = "tf-example-lb-tg"
+resource "aws_lb_target_group" "web-proxy" {
+  name     = var.target_group_name
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.default.id
 }
 
-resource "aws_lb_listener" "front_end" {
-  load_balancer_arn = aws_lb.front_end.arn
+resource "aws_lb_listener" "web-proxy" {
+  load_balancer_arn = aws_lb.web-proxy.arn
   port              = "443"
   protocol          = "HTTPS"
-  # ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = "arn:aws:iam::151204058273:server-certificate/senseon_self_signed_cert"
+  # ssl_policy        = "ELBSecurityPolicy-2016-08"  ?
+  certificate_arn   = "arn:aws:iam::151204058273:server-certificate/senseon_self_signed_cert"  ## this needs to be better
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.front_end.arn
+    target_group_arn = aws_lb_target_group.web-proxy.arn
   }
 }
 
@@ -145,7 +146,7 @@ resource "aws_lb_listener" "front_end" {
 
 resource "aws_autoscaling_group" "web-asg" {
   availability_zones        = local.availability_zones
-  name                      = "terraform-example-asg"
+  name                      = var.asg_name
   max_size                  = var.asg_max
   min_size                  = var.asg_min
   desired_capacity          = var.asg_desired
@@ -153,9 +154,9 @@ resource "aws_autoscaling_group" "web-asg" {
   health_check_grace_period = 300
   launch_configuration      = aws_launch_configuration.web-lc.name
 
-  # load_balancers       = [aws_lb.front_end.name]
-  target_group_arns         = [aws_lb_target_group.front_end.arn]   # ===> https://github.com/terraform-aws-modules/terraform-aws-autoscaling/issues/16
-
+  # load_balancers       = [aws_lb.web-proxy.name]
+  target_group_arns         = [aws_lb_target_group.web-proxy.arn]   # ===> https://github.com/terraform-aws-modules/terraform-aws-autoscaling/issues/16
+                                                                    # `load_balancers` only seem to work with ELB
   tag {
     key                 = "Name"
     value               = "web-asg"
