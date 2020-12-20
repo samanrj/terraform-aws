@@ -87,6 +87,8 @@ variable "instance_sg_ingress_cidr" {
   description = "What CIDR to allow http traffic from"   ## NOTE: I wasn't able to find an elegant way to do it but
                                                          ## we need to only limit this to the traffic coming from gateway +
                                                          ## internal corporate subet address for ssh access for instace
+                                                         ## while on private subnet and not accessible from internet, this
+                                                         ## would still make them accissble on the whole of the subnet
   default     = ["0.0.0.0/0"]
 }
 
