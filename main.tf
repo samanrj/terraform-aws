@@ -32,31 +32,51 @@ resource "aws_internet_gateway" "vpc_igw" {
   }
 }
 
-
-
-resource "aws_subnet" "tf_test_subnet1" {
+## now let's create two Private and two Public subnets
+## Public to bind the ALB to and Private for backend webservers (both for higher availability reasons)
+resource "aws_subnet" "public_eu_west_2a" {
   vpc_id                  = aws_vpc.default.id
   cidr_block              = "10.0.0.0/24"
   map_public_ip_on_launch = true
   availability_zone       = "eu-west-2a"
 
   tags = {
-    Name = "tf_test_subnet1"
+    Name = "Public Subnet eu-west-2a"
   }
 }
 
-resource "aws_subnet" "tf_test_subnet2" {
+resource "aws_subnet" "public_eu_west_2b" {
   vpc_id                  = aws_vpc.default.id
-  cidr_block              = "10.0.8.0/24"
+  cidr_block              = "10.0.1.0/24"
   map_public_ip_on_launch = true
   availability_zone       = "eu-west-2b"
 
   tags = {
-    Name = "tf_test_subnet2"
+    Name = "Public Subnet eu-west-2b"
   }
 }
 
+resource "aws_subnet" "private_eu_west_2a" {
+  vpc_id                  = aws_vpc.default.id
+  cidr_block              = "10.0.8.0/24"
+  map_public_ip_on_launch = true
+  availability_zone       = "eu-west-2a"
 
+  tags = {
+    Name = "Private Subnet eu-west-2a"
+  }
+}
+
+resource "aws_subnet" "private_eu_west_2b" {
+  vpc_id                  = aws_vpc.default.id
+  cidr_block              = "10.0.16.0/24"
+  map_public_ip_on_launch = true
+  availability_zone       = "eu-west-2b"
+
+  tags = {
+    Name = "Private Subnet eu-west-2b"
+  }
+}
 
 ## create a private key to be used in the disposable ssl cert we will
 ## be creating in the next step
@@ -99,17 +119,25 @@ resource "aws_lb" "web-proxy" {
   name               = var.load_balancer_name
   internal           = false
   load_balancer_type = "application"
-  subnets            = [aws_subnet.tf_test_subnet1.id,aws_subnet.tf_test_subnet2.id]
+  subnets            = [aws_subnet.public_eu_west_2a.id,aws_subnet.public_eu_west_2b.id]
 }
 
 ## let's create a target backend group for the ALB so
 ## we can later attach this to an autoscaling group
-## they will be listenning on 80/http
+## they will be listening on 80/http
 resource "aws_lb_target_group" "web-proxy" {
   name     = var.target_group_name
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.default.id
+
+  ## the health check here is redundant IMO, ASG will be carrying that out anyway
+  # health_check {
+  #   healthy_threshold   = 2
+  #   unhealthy_threshold = 2
+  #   timeout             = 3
+  #   interval            = 30
+  # }
 }
 
 ## now let's create the listener and forwarding rules for the lb
@@ -130,14 +158,18 @@ resource "aws_lb_listener" "web-proxy" {
 ## now let's create an ASG and
 ## pass the target group created above to it
 resource "aws_autoscaling_group" "web-asg" {
-  availability_zones        = local.availability_zones
   max_size                  = var.asg_max
   min_size                  = var.asg_min
   desired_capacity          = var.asg_desired
   force_delete              = true
-  name                      = var.asg_name ## needed a way to reference this in L222
+  name                      = var.asg_name ## needed a way to reference this in the last block
   health_check_grace_period = 300
   launch_configuration      = aws_launch_configuration.web-lc.name
+
+  vpc_zone_identifier  = [
+    aws_subnet.private_eu_west_2a.id,
+    aws_subnet.private_eu_west_2b.id
+  ]
 
   # load_balancers       = [aws_lb.web-proxy.name]
   target_group_arns         = [aws_lb_target_group.web-proxy.arn]   # ===> https://github.com/terraform-aws-modules/terraform-aws-autoscaling/issues/16#issuecomment-365388692
@@ -215,7 +247,7 @@ resource "aws_security_group" "default" {
 
 ## more advanced usage, let's create a scaling policy
 ## based on CPU usage for AWS to dynamically scale the ASG
-## once it detects higher levels of traffic and hence CPU usage higher tha 50%
+## once it detects higher levels of traffic and hence CPU usage higher than 50%
 ## picked that value based on some best practices, but made configurable
 resource "aws_autoscaling_policy" "dynamic_scaling" {
 
