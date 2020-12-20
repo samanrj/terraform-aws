@@ -33,8 +33,10 @@ Things I can improve:
 
 
 How to run:
+cd src/
 terraform plan \
   -var-file="variables.tf"
+terraform apply
 
 
 Known issues:
