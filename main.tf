@@ -126,16 +126,6 @@ resource "aws_lb_listener" "front_end" {
 
 
 resource "aws_autoscaling_group" "web-asg" {
-  # availability_zones   = local.availability_zones
-  # name                 = "terraform-example-asg"
-  # max_size             = var.asg_max
-  # min_size             = var.asg_min
-  # desired_capacity     = var.asg_desired
-  # force_delete         = true
-  # launch_configuration = aws_launch_configuration.web-lc.name
-  # target_group_arns    = [aws_lb_target_group.front_end.arn]   # ===> https://github.com/terraform-aws-modules/terraform-aws-autoscaling/issues/16
-
-
   availability_zones        = local.availability_zones
   name                      = "terraform-example-asg"
   max_size                  = var.asg_max
@@ -154,14 +144,8 @@ resource "aws_autoscaling_group" "web-asg" {
     propagate_at_launch = "true"
   }
 }
-# resource "aws_launch_template" "foobar" {
-#   name_prefix   = "foobar"
-#   image_id      = "ami-1a2b3c"
-#   instance_type = "t2.micro"
-# }
 
-resource "aws_launch_template" "web-lc" {
-# resource "aws_launch_configuration" "web-lc" {
+resource "aws_launch_configuration" "web-lc" {
   name          = "terraform-example-lc"
   image_id      = var.aws_amis[var.aws_region]
   instance_type = var.instance_type
